@@ -1,0 +1,1161 @@
+---
+title: "ST2195 Coursework"
+author: "190399375"
+date: 
+output: html_document
+---
+
+```{r}
+#Set working directory
+setwd("C:/Users/Jonathan Koh/Desktop/ST2915 Data Files")
+# Loading the dplyr package and Data manuipulation
+library(dplyr)
+library(ggplot2)
+library(igraph)
+library(reshape2)
+```
+
+```{r}
+#Read 2006/2007 csv files
+df_year_2006 <- read.csv("2006.csv")
+df_year_2007 <- read.csv("2007.csv")
+```
+
+```{r}
+dim(df_year_2007)
+```
+
+```{r}
+#merge both datasets into one dataframe
+df_merged_2006_2007 <- rbind(df_year_2006, df_year_2007)
+```
+
+```{r}
+#remove duplicated rows
+df_merged_2006_2007 <- df_merged_2006_2007 %>% distinct()
+```
+
+```{r}
+#Remove rows with null values from columns, DepTime, ArrTime, AirTime, ArrDelay & DepDelay
+df_cleaned_2006_2007 <- df_merged_2006_2007 %>%
+    filter(!is.na(DepTime), !is.na(ArrTime), !is.na(AirTime), !is.na(ArrDelay), !is.na(DepDelay))
+```
+
+```{r}
+#split into two data frame for convenience
+df_cleaned_2006 <- df_cleaned_2006_2007[df_cleaned_2006_2007$Year == '2006', ]
+
+df_cleaned_2007 <- df_cleaned_2006_2007[df_cleaned_2006_2007$Year == '2007', ]
+```
+
+```{r}
+#reset index for 2007 dataframe
+rownames(df_cleaned_2007) <- NULL
+```
+
+```{r}
+#Remove cancelled flight(s)
+df_cleaned_2007 <- df_cleaned_2007 %>% filter(CancellationCode == '')
+```
+
+------ Q1 When is the best time of day, day of the week, and time of year to fly to minimise delays?
+
+```{r}
+head(df_cleaned_2007, 10)
+```
+
+```{r}
+#Checking digits of CRSDepTime
+df_cleaned_2007['CRSDepTime']
+```
+
+```{r}
+#Add leading zeroes for CRSDepTime to make 4 digits
+
+df_cleaned_2006$CRSDepTime <- sprintf("%04d", df_cleaned_2006$CRSDepTime)
+
+df_cleaned_2007$CRSDepTime <- sprintf("%04d", df_cleaned_2007$CRSDepTime)
+```
+
+```{r}
+#Check that digits with less than 4 digits are filled to 4 digits
+df_cleaned_2006['CRSDepTime']
+```
+
+```{r}
+#Check that digits with less than 4 digits are filled to 4 digits
+df_cleaned_2007['CRSDepTime']
+```
+
+```{r}
+#Create new dataframe to work around for question 1
+df_sorted_2006 <- df_cleaned_2006 %>%
+  select(Month, DayOfWeek, CRSDepTime, ArrDelay)
+df_sorted_2007 <- df_cleaned_2007%>%
+  select(Month, DayOfWeek, CRSDepTime, ArrDelay)
+```
+
+```{r}
+#Take only the first two digits of CRSDepTime
+df_sorted_2006$CRSDepTime <- substr(df_sorted_2006$CRSDepTime, 0, 2)
+```
+
+```{r}
+#Take only the first two digits of CRSDepTime
+df_sorted_2007$CRSDepTime <- substr(df_sorted_2007$CRSDepTime, 0, 2)
+```
+
+```{r}
+#Checks CRSDepTime contains only the first 2 digits
+df_sorted_2006['CRSDepTime']
+```
+
+```{r}
+df_sorted_2007['CRSDepTime']
+```
+
+```{r}
+#Set ArrDelay negatives values to be 0
+df_sorted_2006$ArrDelay[df_sorted_2006$ArrDelay < 0] <- 0
+df_sorted_2007$ArrDelay[df_sorted_2007$ArrDelay < 0] <- 0
+```
+
+```{r}
+#Sort CRSDepTime by ascending order
+df_days_sorted_2006 <- arrange(df_sorted_2006, CRSDepTime)
+head(df_days_sorted_2006, 5)
+
+df_days_sorted_2007 <- arrange(df_sorted_2007, CRSDepTime)
+head(df_days_sorted_2007, 5)
+```
+
+```{r}
+#Check that CRSDepTime is sorted 
+df_days_sorted_2006['CRSDepTime']
+```
+
+```{r}
+#Check that CRSDepTime is sorted 
+df_days_sorted_2007['CRSDepTime']
+```
+----------#Best Time of Day to minimise delay 
+
+```{r}
+#Select CRSDepTime & ArrDelay columns, group by CRSDepTime and getting ArrDelay mean based on n number of hours in CRSDepTime
+df_2006_hours <- df_days_sorted_2006 %>%
+  select(CRSDepTime, ArrDelay) %>% #
+  group_by(CRSDepTime) %>%
+  summarise(
+    arr_delay_mean = mean(ArrDelay, na.rm = TRUE),
+    n_arr_delay = sum(ArrDelay))
+
+#Barplot of time of day in hours against mean arrival delay in minutes 
+ggplot(df_2006_hours, aes(x = CRSDepTime, y = arr_delay_mean)) +
+  geom_bar(stat='identity', fill = '#FF1234') +
+  scale_x_discrete("Hours") +
+  scale_y_discrete("Mean Arrival Delay (minutes)") +
+  ggtitle ('Average Delay in a day(2006)')
+
+df_2006_hours$arr_delay_mean
+
+#Best time of day to fly in 2006 to minimise delays is from 5am to 7am
+```
+
+```{r}
+#Select CRSDepTime & ArrDelay columns, group by CRSDepTime and getting ArrDelay mean based on n number of hours in CRSDepTime
+df_2007_hours <- df_days_sorted_2007 %>%
+  select(CRSDepTime, ArrDelay) %>%
+  group_by(CRSDepTime) %>%
+  summarise(
+    arr_delay_mean = mean(ArrDelay, na.rm = TRUE),
+    n_arr_delay = sum(ArrDelay))
+
+#Barplot of time of day in hours against mean arrival delay in minutes 
+ggplot(df_2007_hours, aes(x = CRSDepTime, y = arr_delay_mean)) +
+  geom_bar(stat='identity', fill = '#FF1234') +
+  scale_x_discrete("Hours") +
+  scale_y_discrete("Mean Arrival Delay (minutes)") +
+  ggtitle ('Average Delay in a day(2007)')
+
+df_2007_hours$arr_delay_mean
+
+#Best time of day to fly in 2006 to minimise delays is from 5am to 7am
+```
+
+---------- #Best Day of Week to minimise delay
+
+```{r}
+#Select DayOfWeek & ArrDelay columns, group by DayOfWeek and getting ArrDelay mean based on n number of days in DayOfWeek
+df_2006_week <- df_sorted_2006 %>%
+  select(DayOfWeek, ArrDelay) %>%
+  group_by(DayOfWeek) %>%
+  summarise(
+    arr_delay_mean = mean(ArrDelay, na.rm = TRUE),
+    n_arr_delay = sum(ArrDelay))
+
+#Barplot of days in a week against mean arrival delay in minutes
+ggplot(df_2006_week, aes(x = DayOfWeek, y = arr_delay_mean)) +
+  geom_bar(stat='identity', fill = '#FF1234') +
+  scale_x_continuous(breaks=seq(1, 7, 1)) +
+  ylab("Mean Arrival Delay (minutes)") +
+  ggtitle ('Average Delay in a Week(2006)')
+
+df_2006_week$arr_delay_mean
+
+#Best time of week to fly in 2006 to minimise delays is on Saturday
+```
+
+```{r}
+#Select DayOfWeek & ArrDelay columns, group by DayOfWeek and getting ArrDelay mean based on n number of days in DayOfWeek
+df_2007_week <- df_sorted_2007 %>%
+  select(DayOfWeek, ArrDelay) %>%
+  group_by(DayOfWeek) %>%
+  summarise(
+    arr_delay_mean = mean(ArrDelay, na.rm = TRUE),
+    n_arr_delay = sum(ArrDelay))
+
+#Barplot of days in a week against mean arrival delay in minutes
+ggplot(df_2007_week, aes(x = DayOfWeek, y = arr_delay_mean)) +
+  geom_bar(stat='identity', fill = '#FF1234') +
+  scale_x_continuous(breaks=seq(1, 7, 1)) +
+  ylab("Mean Arrival Delay (minutes)") +
+  ggtitle ('Average Delay in a Week(2007)')
+
+df_2007_week$arr_delay_mean
+
+#Best time of week to fly in 2006 to minimise delays is on Saturday
+```
+
+---------- #Best Month of year to minimise delay
+
+```{r}
+#Select Month & ArrDelay columns, group by Month and getting ArrDelay mean based on n number of months in Month
+df_2006_month <- df_sorted_2006 %>%
+  select(Month, ArrDelay) %>%
+  group_by(Month) %>%
+  summarise(
+    arr_delay_mean = mean(ArrDelay, na.rm = TRUE),
+    n_arr_delay = sum(ArrDelay))
+
+#Barplot of months in a year against mean arrival delay in minutes
+ggplot(df_2006_month, aes(x = Month, y = arr_delay_mean)) +
+  geom_bar(stat='identity', fill = '#FF1234') +
+  scale_x_continuous(breaks=seq(1, 12, 1)) +
+  ylab('Mean Arrival Delay(minutes)') +
+  ggtitle ('Average Delay in a Year(2006)')
+
+df_2006_month$arr_delay_mean
+
+#Best time of month to fly in 2006 to minimise delays is in January
+```
+
+```{r}
+#Select Month & ArrDelay columns, group by Month and getting ArrDelay mean based on n number of months in Month
+df_2007_month <- df_sorted_2007 %>%
+  select(Month, ArrDelay) %>%
+  group_by(Month) %>%
+  summarise(
+    arr_delay_mean = mean(ArrDelay, na.rm = TRUE),
+    n_arr_delay = sum(ArrDelay))
+
+#Barplot of months in a year against mean arrival delay in minutes
+ggplot(df_2007_month, aes(x = Month, y = arr_delay_mean)) +
+  geom_bar(stat='identity', fill = '#FF1234') +
+  scale_x_continuous(breaks=seq(1, 12, 1)) +
+  ylab('Mean Arrival Delay(minutes)') +
+  ggtitle ('Average Delay in a Year(2007)')
+
+df_2007_month$arr_delay_mean
+
+#Best time of week to fly in 2006 to minimise delays is in September
+```
+```{r}
+#clear workspace
+gc()
+```
+
+----------Question 2 - Do older planes suffer more delays?
+
+
+```{r}
+#Reads plane-data csv file
+df_plane_data <-read.csv("plane-data.csv") 
+```
+
+```{r}
+#Changes col names in plane-data.csv to merge with data set
+colnames(df_plane_data)[which(names(df_plane_data) == 'tailnum')] <- 'TailNum'
+```
+
+```{r}
+#Merge plane-data to both 2006/2007 dataset based on TailNum
+df_merged_2006 <- inner_join (df_cleaned_2006, df_plane_data, by = 'TailNum')
+df_merged_2007 <- inner_join (df_cleaned_2007, df_plane_data, by = 'TailNum')
+```
+
+```{r}
+#Change data type of column year from plane-data for deduction. Changes plane year of 0 to NA for removal.
+
+df_merged_2006$year <- as.numeric(as.character(df_merged_2006$year))
+df_merged_2006$year[df_merged_2006$year == 0] <- NA
+df_merged_2007$year <- as.numeric(as.character(df_merged_2007$year))
+df_merged_2007$year[df_merged_2007$year == 0] <- NA
+```
+
+```{r}
+#Check that plane years are usable
+unique(df_merged_2006$year)
+unique(df_merged_2007$year)
+```
+
+```{r}
+#Creates new data frame
+df_age_delay_2006 <- df_merged_2006 %>%
+  select(DepDelay, ArrDelay, Year, year) %>% #selects columns needed to manipulate and plot
+  filter(year != '2007', year != 'NA') %>% #remove plane year older than data set and null values
+  mutate(age = Year - year) %>% #creates new column, age 
+  group_by(age) %>% #group by to summarise
+  summarise(
+    dep_delay_mean = mean(DepDelay, na.rm = TRUE),
+    arr_delay_mean = mean(ArrDelay, na.rm = TRUE))
+
+#Creates new data frame
+df_age_delay_2007 <- df_merged_2007 %>%
+  select(DepDelay, ArrDelay, Year, year) %>% #selects columns needed to manipulate and plot
+  filter(year != 'NA') %>% #remove null values
+  mutate(age = Year - year) %>% #creates new column, age
+  group_by(age) %>% #group by to summarise
+  summarise(
+    dep_delay_mean = mean(DepDelay, na.rm = TRUE),
+    arr_delay_mean = mean(ArrDelay, na.rm = TRUE))
+```
+
+```{r}
+#Plots Age of plane in years against Mean Arrival Delays
+ggplot(df_age_delay_2006, aes(x = age, y = arr_delay_mean)) +
+  geom_point() +
+  scale_x_continuous("Age of plane (years)") +
+  scale_y_continuous("Mean Departure Delay (minutes)") +
+  ggtitle("Average Arrival Delay by PLane Age(2006)") +
+  geom_smooth(method = 'lm', se = FALSE)
+
+#Plots Age of plane in years against Mean Departure Delays
+ggplot(df_age_delay_2006, aes(x = age, y = dep_delay_mean)) +
+  geom_point() +
+  scale_x_continuous("Age of plane (years)") +
+  scale_y_continuous("Mean Departure Delay (minutes)") +
+  ggtitle("Average Departure Delay by PLane Age(2006)") +
+  geom_smooth(method = 'lm', se = FALSE)
+
+df_age_delay_2006
+```
+
+
+```{r}
+#Plots Age of plane in years against Mean Arrival Delays
+ggplot(df_age_delay_2007, aes(x = age, y = arr_delay_mean)) +
+  geom_point() +
+  scale_x_continuous("Age of plane (years)") +
+  scale_y_continuous("Mean Departure Delay (minutes)") +
+  ggtitle("Average Arrival Delay by PLane Age(2007)") +
+  geom_smooth(method = 'lm', se = FALSE)
+
+#Plots Age of plane in years against Mean Departure Delays
+ggplot(df_age_delay_2007, aes(x = age, y = dep_delay_mean)) +
+  geom_point() +
+  scale_x_continuous("Age of plane (years)") +
+  scale_y_continuous("Mean Departure Delay (minutes)")+
+  ggtitle("Average Departure Delay by PLane Age(2007)") +
+  geom_smooth(method = 'lm', se = FALSE)
+
+df_age_delay_2007
+```
+```{r}
+df_age_delay_2007
+```
+
+```{r}
+gc()
+```
+
+
+```{r}
+#Creates new data frame
+per_delay_2006 <- df_merged_2006 %>%
+  select(DepDelay, ArrDelay, Year, year) %>% #selects columns needed to manipulate and plot
+  filter(year != '2007', year != 'NA') %>% #remove plane year older than data set and null values
+  mutate(age = Year - year) %>% #creates new column, age 
+  group_by(age)
+
+#Creates new data frame
+per_delay_2007 <- df_merged_2007 %>%
+  select(DepDelay, ArrDelay, Year, year) %>% #selects columns needed to manipulate and plot
+  filter(year != 'NA') %>% #remove null values
+  mutate(age = Year - year) %>% #creates new column, age
+  group_by(age) 
+```
+
+```{r}
+#Creates new column to assign values
+per_delay_2006$Arr_Delayed <- per_delay_2006$ArrDelay
+per_delay_2006$Dep_Delayed <- per_delay_2006$DepDelay
+```
+
+```{r}
+#Creates new column to assign values
+per_delay_2007$Arr_Delayed <- per_delay_2007$ArrDelay
+per_delay_2007$Dep_Delayed <- per_delay_2007$DepDelay
+```
+
+
+```{r}
+#Assign 1 to delay and 0 to no delay
+per_delay_2006$Arr_Delayed[per_delay_2006$Arr_Delayed <= 0 ] <- 0
+per_delay_2006$Arr_Delayed[per_delay_2006$Arr_Delayed > 0 ] <- 1
+per_delay_2006$Dep_Delayed[per_delay_2006$Dep_Delayed <= 0 ] <- 0
+per_delay_2006$Dep_Delayed[per_delay_2006$Dep_Delayed > 0 ] <- 1
+```
+
+
+```{r}
+#Assign 1 to delay and 0 to no delay
+per_delay_2007$Arr_Delayed[per_delay_2007$Arr_Delayed <= 0 ] <- 0
+per_delay_2007$Arr_Delayed[per_delay_2007$Arr_Delayed > 0 ] <- 1
+per_delay_2007$Dep_Delayed[per_delay_2007$Dep_Delayed <= 0 ] <- 0
+per_delay_2007$Dep_Delayed[per_delay_2007$Dep_Delayed > 0 ] <- 1
+```
+
+```{r}
+nrow(per_delay_2006)
+```
+
+```{r}
+#Total count of delayed and not delayed flights
+arr_delayed_counts_2006 <- per_delay_2006 %>%
+  filter(Arr_Delayed == 1) %>%
+  group_by(age) %>%
+  count(Arr_Delayed)
+
+arr_not_delayed_counts_2006 <- per_delay_2006 %>%
+  filter(Arr_Delayed == 0) %>%
+  group_by(age) %>%
+  count(Arr_Delayed)
+```
+
+```{r}
+dep_delayed_counts_2006 <- per_delay_2006 %>%
+  filter(Dep_Delayed == 1) %>%
+  group_by(age) %>%
+  count(Dep_Delayed)
+
+dep_not_delayed_counts_2006 <- per_delay_2006 %>%
+  filter(Dep_Delayed == 0) %>%
+  group_by(age) %>%
+  count(Dep_Delayed)
+```
+
+```{r}
+arr_delayed_counts_2007 <- per_delay_2007 %>%
+  filter(Arr_Delayed == 1) %>%
+  group_by(age) %>%
+  count(Arr_Delayed)
+
+arr_not_delayed_counts_2007 <- per_delay_2007 %>%
+  filter(Arr_Delayed == 0) %>%
+  group_by(age) %>%
+  count(Arr_Delayed)
+```
+
+```{r}
+dep_delayed_counts_2007 <- per_delay_2007 %>%
+  filter(Dep_Delayed == 1) %>%
+  group_by(age) %>%
+  count(Dep_Delayed)
+
+dep_not_delayed_counts_2007 <- per_delay_2007 %>%
+  filter(Dep_Delayed == 0) %>%
+  group_by(age) %>%
+  count(Dep_Delayed)
+```
+
+```{r}
+#Rename column name to merge for arr delays 2006
+colnames(arr_delayed_counts_2006)[colnames(arr_delayed_counts_2006) == 'n'] <- 'Delayed'
+
+colnames(arr_not_delayed_counts_2006)[colnames(arr_not_delayed_counts_2006) == 'n'] <- 'Not Delayed'
+```
+
+```{r}
+#Rename column name to merge for dep delays 2006
+colnames(dep_delayed_counts_2006)[colnames(dep_delayed_counts_2006) == 'n'] <- 'Delayed'
+
+colnames(dep_not_delayed_counts_2006)[colnames(dep_not_delayed_counts_2006) == 'n'] <- 'Not Delayed'
+```
+
+```{r}
+#Rename column name to merge for arr delays 2007
+colnames(arr_delayed_counts_2007)[colnames(arr_delayed_counts_2007) == 'n'] <- 'Delayed'
+
+colnames(arr_not_delayed_counts_2007)[colnames(arr_not_delayed_counts_2007) == 'n'] <- 'Not Delayed'
+```
+
+```{r}
+#Rename column name to merge for dep delays 2007
+colnames(dep_delayed_counts_2007)[colnames(dep_delayed_counts_2007) == 'n'] <- 'Delayed'
+
+colnames(dep_not_delayed_counts_2007)[colnames(dep_not_delayed_counts_2007) == 'n'] <- 'Not Delayed'
+```
+
+```{r}
+#Merge both dataframe for total arr delay counts 2006
+arr_counts_2006 <- inner_join(arr_delayed_counts_2006, arr_not_delayed_counts_2006, by = 'age')
+
+#Get percentage of flight delayed arr 2006
+arr_counts_2006$Total_Flights <- rowSums(arr_counts_2006[,c("Delayed", "Not Delayed")])
+
+arr_counts_2006$per_delayed <- ((arr_counts_2006$Delayed/arr_counts_2006$Total_Flights)* 100)
+```
+
+```{r}
+#Merge both dataframe for total dep delay counts 2006
+dep_counts_2006 <- inner_join(dep_delayed_counts_2006, dep_not_delayed_counts_2006, by = 'age')
+
+#Get percentage of flight delayed dep 2006
+dep_counts_2006$Total_Flights <- rowSums(dep_counts_2006[,c("Delayed", "Not Delayed")])
+
+dep_counts_2006$per_delayed <- ((dep_counts_2006$Delayed/dep_counts_2006$Total_Flights)* 100)
+```
+
+```{r}
+#Merge both dataframe for total arr delay counts 2007
+arr_counts_2007 <- inner_join(arr_delayed_counts_2007, arr_not_delayed_counts_2007, by = 'age')
+
+#Get percentage of flight delayed arr 2007
+arr_counts_2007$Total_Flights <- rowSums(arr_counts_2007[,c("Delayed", "Not Delayed")])
+
+arr_counts_2007$per_delayed <- ((arr_counts_2007$Delayed/arr_counts_2007$Total_Flights)* 100)
+```
+
+```{r}
+#Merge both dataframe for total arr delay counts 2007
+dep_counts_2007 <- inner_join(dep_delayed_counts_2007, dep_not_delayed_counts_2007, by = 'age')
+
+#Get percentage of flight delayed dep 2007
+dep_counts_2007$Total_Flights <- rowSums(dep_counts_2007[,c("Delayed", "Not Delayed")])
+
+dep_counts_2007$per_delayed <- ((dep_counts_2007$Delayed/dep_counts_2007$Total_Flights)* 100)
+```
+
+```{r}
+arr_counts_2007$per_delayed
+```
+
+
+```{r}
+per_total_counts <- ggplot() + 
+  geom_line(data=arr_counts_2006, aes(x=age, y = per_delayed), color= 'blue') + 
+  geom_line(data=dep_counts_2006, aes(x=age, y=per_delayed), color = "orange") +
+  geom_line(data=arr_counts_2007, aes(x=age, y=per_delayed), color = "green") +
+  geom_line(data=dep_counts_2007, aes(x=age, y=per_delayed), color = "red") +
+  xlab('Age of Planes in Years') +
+  ylab('Percentage of Flights Delayed')+
+  ggtitle ("% of Flights Delayed")
+
+per_total_counts
+```
+
+```{r}
+#clear workspace
+gc()
+```
+---------- Q3 How does the number of people flying between different locations change over time?
+
+```{r}
+#import airport csv file
+df_airports <- read.csv("airports.csv")
+```
+
+```{r}
+head(df_airports)
+```
+
+```{r}
+#Selects iata code and states columns to new dataframe
+df_airport_states <- df_airports %>%
+  select(iata, state)
+```
+
+```{r}
+head(df_airport_states)
+```
+ 
+```{r}
+#Create new dataframe selecting origin and dest columns only
+df_origin_dest_2006 <- df_cleaned_2006 %>%
+  select (Origin, Dest)
+df_origin_dest_2007 <- df_cleaned_2007 %>%
+  select (Origin, Dest)
+```
+
+```{r}
+#Create a new column of states by matching Origin and iata columns
+df_origin_dest_2006$origin_states <- df_airport_states$state[match(df_origin_dest_2006$Origin, df_airport_states$iata)]
+
+#Create a new column of states by matching Dest and iata columns
+df_origin_dest_2006$dest_states <- df_airport_states$state[match(df_origin_dest_2006$Dest, df_airport_states$iata)]
+```
+
+```{r}
+#Create a new column of states by matching Origin and iata columns
+df_origin_dest_2007$origin_states <- df_airport_states$state[match(df_origin_dest_2007$Origin, df_airport_states$iata)]
+
+#Create a new column of states by matching Dest and iata columns
+df_origin_dest_2007$dest_states <- df_airport_states$state[match(df_origin_dest_2007$Dest, df_airport_states$iata)]
+```
+
+```{r}
+head(df_origin_dest_2006)
+```
+
+```{r}
+head(df_origin_dest_2007)
+```
+
+```{r}
+#Creates a route from origin to dest by states
+df_origin_dest_2006$Routes <- paste(df_origin_dest_2006$origin_states, "to", df_origin_dest_2006$dest_states)
+```
+
+```{r}
+head(df_origin_dest_2006)
+```
+
+```{r}
+#Creates a route from origin to dest by states
+df_origin_dest_2007$Routes <- paste(df_origin_dest_2007$origin_states, "to", df_origin_dest_2007$dest_states)
+```
+
+```{r}
+head(df_origin_dest_2007)
+```
+
+```{r}
+#Check for null values
+colSums(is.na(df_origin_dest_2006))
+colSums(is.na(df_origin_dest_2007))
+```
+
+```{r}
+#Removes null values
+df_origin_dest_2006 %>%
+    filter(!is.na(origin_states), !is.na(dest_states))
+
+df_origin_dest_2007 %>%
+    filter(!is.na(origin_states), !is.na(dest_states))
+```
+
+```{r}
+#Get values counts of each route in dataframe
+value_counts_2006 <- df_origin_dest_2006 %>%
+  count(Routes) %>%
+  arrange(desc(n)) #arranges by descending order
+
+colnames(value_counts_2006) <- c('Routes','Counts')
+```
+
+```{r}
+#Get values counts of each route in dataframe
+value_counts_2007 <- df_origin_dest_2007 %>%
+  count(Routes) %>%
+  arrange(desc(n)) #arranges by descending order
+
+colnames(value_counts_2007) <- c('Routes','Counts')
+
+```
+
+```{r}
+#Get top 20 rows from dataframe
+top_20_routes_2006 <- value_counts_2006 %>%
+  slice_head(n=20)
+top_20_routes_2007 <- value_counts_2007 %>%
+  slice_head(n=20)
+```
+
+```{r}
+#Merges both dataframe
+combined_top_routes <- inner_join(top_20_routes_2006, top_20_routes_2007, by = 'Routes')
+```
+
+```{r}
+#Changes column names
+names(combined_top_routes)[names(combined_top_routes) == 'Counts.x'] <- 2006
+names(combined_top_routes)[names(combined_top_routes) == 'Counts.y'] <- 2007
+```
+
+```{r}
+head(combined_top_routes)
+```
+
+```{r, fig.width=14,fig.height=8}
+combined_top_routes.long <- melt(combined_top_routes)
+
+
+ggplot(combined_top_routes.long, aes(x = Routes, y = value,fill= variable)) + 
+  geom_bar(stat="identity",position="dodge") +
+  scale_x_discrete(limits = combined_top_routes$Routes) + 
+  scale_fill_discrete(name = 'Years') +
+  scale_y_continuous(breaks = seq(0, 450000, by = 50000)) +
+  xlab('Routes(States)') +
+  ylab('Total Flights') +
+  ggtitle ('Top 20 Routes between States(2006 vs 2007)')
+  
+combined_top_routes
+```
+
+```{r}
+gc()
+```
+
+
+
+---------- Q4 - Can you detect cascading failures as delays in one airport create delays in others?
+
+```{r}
+nrow(df_cleaned_2007)
+```
+
+
+```{r}
+#Select columns needed
+df_jan_2006 <- df_cleaned_2006 %>%
+  select(ArrDelay, DepDelay, Month, DayofMonth, Origin, Dest) %>%
+  filter(Month == 1)
+
+df_jan_2007 <- df_cleaned_2007 %>%
+  select(ArrDelay, DepDelay, Month, DayofMonth, Origin, Dest) %>%
+  filter(Month == 1)
+```
+
+
+```{r}
+#Check rows 
+nrow(df_jan_2006)
+nrow(df_jan_2007)
+```
+```{r}
+head(df_jan_2006)
+head(df_jan_2007)
+```
+
+```{r}
+#Check which origin airports are the busiest 
+df_jan_2006 %>%
+  count(Origin) %>%
+  arrange(desc(n))
+```
+```{r}
+#Check which dest airports are the busiest 
+df_jan_2006 %>%
+  count(Dest) %>%
+  arrange(desc(n))
+```
+
+
+```{r}
+#Check which origin airports are the busiest
+df_jan_2007 %>%
+  count(Origin) %>%
+  arrange(desc(n))
+```
+
+
+```{r}
+#Check which dest airports are the busiest
+df_jan_2007 %>%
+  count(Dest) %>%
+  arrange(desc(n))
+```
+
+```{r}
+#Filter out the most traffic airport
+jan_atl_org_2006 <- df_jan_2006 %>%
+  filter(Origin == 'ATL')
+jan_atl_dest_2006 <- df_jan_2006 %>%
+  filter(Dest == 'ATL')
+```
+
+```{r}
+#Groupby DayofMonth
+atl_org_2006 <- jan_atl_org_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_dep_delay_2006 = sum(DepDelay))
+
+atl_dest_2006 <- jan_atl_dest_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_arr_delay_2006 = sum(ArrDelay))
+```
+
+```{r}
+atl_2006_plot <- ggplot() + geom_line(data=atl_org_2006, aes(x=DayofMonth, y = n_dep_delay_2006), color= 'orange') + 
+  geom_line(data=atl_dest_2006, aes(x=DayofMonth, y=n_arr_delay_2006), color = "blue") +
+  xlab('Day of Month') +
+  ylab('Total Delays(Minutes)')+
+  ggtitle ("ATL Airport Arr & Dep Delays(2006)")
+
+atl_2006_plot
+```
+
+
+```{r}
+jan_ord_org_2006 <- df_jan_2006 %>%
+  filter(Origin == 'ORD')
+jan_ord_dest_2006 <- df_jan_2006 %>%
+  filter(Dest == 'ORD')
+```
+
+```{r}
+#Groupby DayofMonth
+ord_org_2006 <- jan_ord_org_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_dep_delay_2006 = sum(DepDelay))
+
+ord_dest_2006 <- jan_ord_dest_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_arr_delay_2006 = sum(ArrDelay))
+```
+
+
+```{r}
+ord_2006_plot <- ggplot() + geom_line(data=ord_org_2006, aes(x=DayofMonth, y = n_dep_delay_2006), color= 'orange') + 
+  geom_line(data=ord_dest_2006, aes(x=DayofMonth, y=n_arr_delay_2006), color = "blue") +
+  xlab('Day of Month') +
+  ylab('Total Delays(Minutes)')+
+  ggtitle ("ORD Airport Arr & Dep Delays(2006)")
+
+ord_2006_plot
+```
+
+
+```{r}
+#Filter out the most traffic airport
+jan_atl_org_2007 <- df_jan_2007 %>%
+  filter(Origin == 'ATL')
+jan_atl_dest_2007 <- df_jan_2007 %>%
+  filter(Dest == 'ATL')
+```
+
+```{r}
+#Groupby DayofMonth
+atl_org_2007 <- jan_atl_org_2007 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_dep_delay_2007 = sum(DepDelay))
+
+atl_dest_2007 <- jan_atl_dest_2007 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_arr_delay_2007 = sum(ArrDelay))
+```
+
+```{r}
+atl_2007_plot <- ggplot() + geom_line(data=atl_org_2007, aes(x=DayofMonth, y = n_dep_delay_2007), color= 'orange') + 
+  geom_line(data=atl_dest_2007, aes(x=DayofMonth, y=n_arr_delay_2007), color = "blue") +
+  xlab('Day of Month') +
+  ylab('Total Delays(Minutes)')+
+  ggtitle ("ATL Airport Arr & Dep Delays(2007)")
+
+atl_2007_plot
+```
+
+
+```{r}
+jan_ord_org_2007 <- df_jan_2007 %>%
+  filter(Origin == 'ORD')
+jan_ord_dest_2007 <- df_jan_2007 %>%
+  filter(Dest == 'ORD')
+```
+
+```{r}
+#Groupby DayofMonth
+ord_org_2007 <- jan_ord_org_2007 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_dep_delay_2007 = sum(DepDelay))
+
+ord_dest_2007 <- jan_ord_dest_2007 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_arr_delay_2007 = sum(ArrDelay))
+```
+
+
+```{r}
+ord_2007_plot <- ggplot() + geom_line(data=ord_org_2007, aes(x=DayofMonth, y = n_dep_delay_2007), color= 'orange') + 
+  geom_line(data=ord_dest_2007, aes(x=DayofMonth, y=n_arr_delay_2007), color = "blue") +
+  xlab('Day of Month') +
+  ylab('Total Delays(Minutes)')+
+  ggtitle ("ORD Airport Arr & Dep Delays(2007)")
+
+ord_2007_plot
+```
+```{r}
+##### Confirming pattern for other airports to back our results
+#Filter out the most traffic airport
+jan_den_org_2006 <- df_jan_2006 %>%
+  filter(Origin == 'DEN')
+jan_den_dest_2006 <- df_jan_2006 %>%
+  filter(Dest == 'DEN')
+
+#Groupby DayofMonth
+den_org_2006 <- jan_den_org_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_dep_delay_2006 = sum(DepDelay))
+
+den_dest_2006 <- jan_den_dest_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_arr_delay_2006 = sum(ArrDelay))
+
+den_2006_plot <- ggplot() + geom_line(data=den_org_2006, aes(x=DayofMonth, y = n_dep_delay_2006), color= 'orange') + 
+  geom_line(data=den_dest_2006, aes(x=DayofMonth, y=n_arr_delay_2006), color = "blue") +
+  xlab('Day of Month') +
+  ylab('Total Delays(Minutes)')+
+  ggtitle ("DFW Airport Arr & Dep Delays(2006)")
+
+den_2006_plot
+```
+```{r}
+##### Confirming pattern for other airports to back our results
+#Filter out the most traffic airport
+jan_dfw_org_2006 <- df_jan_2006 %>%
+  filter(Origin == 'DFW')
+jan_dfw_dest_2006 <- df_jan_2006 %>%
+  filter(Dest == 'DFW')
+
+#Groupby DayofMonth
+dfw_org_2006 <- jan_dfw_org_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_dep_delay_2006 = sum(DepDelay))
+
+dfw_dest_2006 <- jan_dfw_dest_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_arr_delay_2006 = sum(ArrDelay))
+
+dfw_2006_plot <- ggplot() + geom_line(data=dfw_org_2006, aes(x=DayofMonth, y = n_dep_delay_2006), color= 'orange') + 
+  geom_line(data=dfw_dest_2006, aes(x=DayofMonth, y=n_arr_delay_2006), color = "blue") +
+  xlab('Day of Month') +
+  ylab('Total Delays(Minutes)')+
+  ggtitle ("DFW Airport Arr & Dep Delays(2006)")
+
+dfw_2006_plot
+```
+```{r}
+##### Confirming pattern for other airports to back our results
+#Filter out the most traffic airport
+jan_lax_org_2006 <- df_jan_2006 %>%
+  filter(Origin == 'LAX')
+jan_lax_dest_2006 <- df_jan_2006 %>%
+  filter(Dest == 'LAX')
+
+#Groupby DayofMonth
+lax_org_2006 <- jan_lax_org_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_dep_delay_2006 = sum(DepDelay))
+
+lax_dest_2006 <- jan_den_dest_2006 %>%
+  group_by(DayofMonth) %>%
+  summarise(n_arr_delay_2006 = sum(ArrDelay))
+
+lax_2006_plot <- ggplot() + geom_line(data=lax_org_2006, aes(x=DayofMonth, y = n_dep_delay_2006), color= 'orange') + 
+  geom_line(data=lax_dest_2006, aes(x=DayofMonth, y=n_arr_delay_2006), color = "blue") +
+  xlab('Day of Month') +
+  ylab('Total Delays(Minutes)')+
+  ggtitle ("DFW Airport Arr & Dep Delays(2006)")
+
+lax_2006_plot
+```
+
+```{r}
+library("ggpubr")
+ggscatter(df_jan_2006, x = "ArrDelay", y = "DepDelay", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "ArrDelay", ylab = "DepDelay", title = "ArrDelay & DepDelay Scatterplot(2006)")
+```
+
+
+```{r}
+ggscatter(df_jan_2007, x = "ArrDelay", y = "DepDelay", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "ArrDelay", ylab = "DepDelay", title = "ArrDelay & DepDelay Scatterplot(2007)")
+```
+
+```{r}
+cor(df_jan_2006$ArrDelay, df_jan_2006$DepDelay, method = c("pearson", "kendall", "spearman"))
+
+cor(df_jan_2007$ArrDelay, df_jan_2007$DepDelay, method = c("pearson", "kendall", "spearman"))
+```
+
+
+```{r}
+gc()
+```
+
+
+------ #Q5 Use the available variables to construct a model that predicts delays
+
+```{r}
+flights_predictions_2006 <- df_cleaned_2006
+flights_predictions_2007 <- df_cleaned_2007
+```
+
+```{r}
+flights_subset_2006 <- flights_predictions_2006 %>%
+  slice(1:1000000)
+flights_subset_2007 <- flights_predictions_2007 %>%
+  slice(1:1000000)
+```
+
+```{r}
+head(flights_subset_2006)
+```
+
+```{r}
+#Change CRSDepTime to integer
+flights_subset_2006$CRSDepTime <- as.integer(flights_subset_2006$CRSDepTime)
+
+flights_subset_2007$CRSDepTime <- as.integer(flights_subset_2007$CRSDepTime)
+```
+
+
+```{r}
+#Set threshold for delay to be > 15mins. Append 1,0
+flights_subset_2006$results <- ifelse(flights_subset_2006$ArrDelay > 15, 1, 0)
+```
+
+```{r}
+#Set threshold for delay to be > 15mins. Append 1,0
+flights_subset_2007$results <- ifelse(flights_subset_2007$ArrDelay > 15, 1, 0)
+```
+
+```{r}
+flights_subset_2006 %>%
+  filter(results == 1)%>%
+  count(results)
+```
+
+```{r}
+flights_subset_2007 %>%
+  filter(results == 1)%>%
+  count(results)
+```
+
+```{r}
+#Remove columns character columns
+flights_subset_2006 <- subset(flights_subset_2006, select = -c(UniqueCarrier, TailNum, Origin, Dest, CancellationCode, FlightNum, Year, Cancelled, Diverted))
+
+flights_subset_2007 <- subset(flights_subset_2007, select = -c(UniqueCarrier, TailNum, Origin, Dest, CancellationCode, Year, Cancelled, Diverted))
+```
+
+```{r fig.height=6, fig.width=7}
+corr_2006 <- cor(flights_subset_2006[sapply(flights_subset_2006,is.numeric)])
+ 
+melted_2006 <- melt(corr_2006)
+
+plot1 <- ggplot(melted_2006, aes(Var1, Var2)) +
+    geom_tile(aes(fill = value)) + 
+    geom_text(aes(label = round(value, 1))) +
+    scale_fill_gradient(low = "white", high = "red")
+plot1 + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+```{r}
+#Remove columns highly correlated
+flights_subset_2006 <- subset(flights_subset_2006, select = -c(DepTime, ArrTime, AirTime, CRSElapsedTime, ActualElapsedTime, Distance, TaxiIn, TaxiOut, ArrDelay))
+
+flights_subset_2007 <- subset(flights_subset_2007, select = -c(DepTime, ArrTime, AirTime, CRSElapsedTime, ActualElapsedTime, Distance, TaxiIn, TaxiOut, ArrDelay))
+```
+
+```{r}
+colnames(flights_subset_2006)
+```
+```{r}
+library(caTools)
+#70/30 Train-test split
+set.seed(2022)
+df_2006_train <- sample.split(Y=flights_subset_2006$results, SplitRatio = 0.7)
+df_2006_trainset <- subset(flights_subset_2006, df_2006_train==T)
+df_2006_testset <- subset(flights_subset_2006, df_2006_train==F)
+```
+
+
+```{r}
+library(rpart)
+library(rpart.plot)
+set.seed(2022)
+r_cart <- rpart(results ~ ., method = "class", control = rpart.control(minsplit = 50, cp = 0.01), data = df_2006_trainset)
+rpart.plot(r_cart, nn=T)
+print(r_cart)
+printcp(r_cart, digits = 3)
+prediction_cart <- predict(r_cart, df_2006_testset, type = "class")
+```
+
+```{r}
+#Cross Table
+library(gmodels)
+library(MASS)
+library(ROSE)
+table(df_2006_testset$results, prediction_cart)
+CrossTable(df_2006_testset$results, prediction_cart, prop.chisq = FALSE)
+
+#Error, accuracy and AUC
+me_cart <- 1 - length(df_2006_testset$results[df_2006_testset$results == prediction_cart]) / length(df_2006_testset$results)
+print(me_cart)#Misclassification Rate 11.94
+accuracy_cart <- mean(prediction_cart == df_2006_testset$results)
+print(accuracy_cart) #88.05%
+auc_cart <- roc.curve(df_2006_testset$results, prediction_cart)
+print(auc_cart) #98.8% accurate
+```
+
+
+```{r}
+#70/30 Train-test split
+set.seed(2022)
+df_2007_train <- sample.split(Y=flights_subset_2007$results, SplitRatio = 0.7)
+df_2007_trainset <- subset(flights_subset_2007, df_2007_train==T)
+df_2007_testset <- subset(flights_subset_2007, df_2007_train==F)
+```
+
+
+```{r}
+library(rpart)
+library(rpart.plot)
+set.seed(2022)
+r_cart_2 <- rpart(results ~ ., method = "class", control = rpart.control(minsplit = 50, cp = 0.01), data = df_2007_trainset)
+rpart.plot(r_cart_2, nn=T)
+print(r_cart_2)
+printcp(r_cart_2, digits = 3)
+prediction_cart_2 <- predict(r_cart_2, df_2007_testset, type = "class")
+```
+
+```{r}
+#Cross Table
+table(df_2007_testset$results, prediction_cart_2)
+CrossTable(df_2007_testset$results, prediction_cart_2, prop.chisq = FALSE)
+
+#Error, accuracy and AUC
+me_cart_2 <- 1 - length(df_2007_testset$results[df_2007_testset$results == prediction_cart_2]) / length(df_2007_testset$results)
+print(me_cart_2)#Misclassification Rate 11.94
+accuracy_cart_2 <- mean(prediction_cart_2 == df_2007_testset$results)
+print(accuracy_cart_2) #88.05%
+auc_cart_2 <- roc.curve(df_2007_testset$results, prediction_cart_2)
+print(auc_cart_2) #98.41 accurate
+```
+
+```{r}
+gc()
+```
+
+```{r}
+print('----------------------------END----------------------------------')
+```
+
+--------------------------------#END#--------------------------------------------
+
